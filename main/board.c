@@ -467,32 +467,89 @@ esp_err_t board_audio_record(i2s_chan_handle_t rx_handle, uint8_t *buffer,
     vTaskDelay(pdMS_TO_TICKS(50));
     
     // 开始录音
-    ESP_LOGI(TAG_AUDIO, "开始录制音频，最大字节数: %u", (unsigned int)buffer_size);
+    ESP_LOGI(TAG_AUDIO, "开始录制音频，总缓冲区大小: %u 字节，请求时长: %u 毫秒", 
+              (unsigned int)buffer_size, (unsigned int)timeout_ms);
     uint32_t start_time = esp_log_timestamp();
+    uint32_t elapsed_time = 0;
+    uint32_t last_progress_time = 0;
     
-    // 读取数据
-    ret = i2s_channel_read(rx_handle, buffer, buffer_size, &bytes_read_once, 
-                          pdMS_TO_TICKS(timeout_ms));
+    // 计算每秒的数据量（用于估计录音长度）
+    // 16位立体声 @ 44.1kHz = 44100 * 2(字节) * 2(通道) = 176400 字节/秒
+    size_t bytes_per_second = BOARD_AUDIO_SAMPLE_RATE * 2 * 2; // 采样率 * 16位(2字节) * 通道数
+    float max_recording_seconds = (float)buffer_size / bytes_per_second;
+    ESP_LOGI(TAG_AUDIO, "当前缓冲区最多可录制约 %.2f 秒音频", max_recording_seconds);
     
-    if (ret == ESP_ERR_TIMEOUT) {
-        ESP_LOGW(TAG_AUDIO, "读取超时");
-        i2s_channel_disable(rx_handle);
-        return ESP_ERR_TIMEOUT;
-    } else if (ret != ESP_OK) {
-        ESP_LOGE(TAG_AUDIO, "读取错误: %s", esp_err_to_name(ret));
-        i2s_channel_disable(rx_handle);
-        return ret;
+    // 使用BOARD_AUDIO_RECORD_CHUNK_SIZE控制每次读取的数据量
+    size_t chunk_size = BOARD_AUDIO_RECORD_CHUNK_SIZE;
+    if (chunk_size > buffer_size) {
+        chunk_size = buffer_size;
+    }
+    
+    // 录音循环，直到达到超时时间或缓冲区已满
+    while (elapsed_time < timeout_ms && *bytes_read < buffer_size) {
+        // 计算剩余可用缓冲区
+        size_t remaining_buffer = buffer_size - *bytes_read;
+        // 确定本次读取的大小
+        size_t read_size = (remaining_buffer < chunk_size) ? remaining_buffer : chunk_size;
+        
+        // 判断是否还有足够的可录制时间
+        uint32_t remaining_timeout = timeout_ms - elapsed_time;
+        if (remaining_timeout < 100) {
+            ESP_LOGI(TAG_AUDIO, "录音时间即将到达，完成录音");
+            break;
+        }
+        
+        // 设置单次读取的超时时间
+        uint32_t read_timeout = (remaining_timeout < 500) ? remaining_timeout : 500; // 最多500ms一次
+        
+        // 读取数据
+        ret = i2s_channel_read(rx_handle, buffer + *bytes_read, read_size, &bytes_read_once, 
+                              pdMS_TO_TICKS(read_timeout));
+        
+        if (ret == ESP_ERR_TIMEOUT) {
+            // 读取超时，但仍可继续
+            ESP_LOGW(TAG_AUDIO, "读取超时，但将继续录音");
+        } else if (ret != ESP_OK) {
+            // 其他错误，退出
+            ESP_LOGE(TAG_AUDIO, "读取错误: %s", esp_err_to_name(ret));
+            i2s_channel_disable(rx_handle);
+            return ret;
+        }
+        
+        // 更新已读取的总字节数
+        *bytes_read += bytes_read_once;
+        
+        // 更新已经过的时间
+        elapsed_time = esp_log_timestamp() - start_time;
+        
+        // 更新进度信息 - 每200毫秒输出一次进度
+        if (elapsed_time - last_progress_time >= 200) {
+            last_progress_time = elapsed_time;
+            float progress_seconds = (float)*bytes_read / bytes_per_second;
+            float total_seconds = (float)timeout_ms / 1000.0f;
+            float percent = (total_seconds > 0) ? (progress_seconds / total_seconds) * 100.0f : 0.0f;
+            
+            ESP_LOGI(TAG_AUDIO, "录音进度: %.1f%% (%.2f秒/%.2f秒)，已录制 %u 字节", 
+                     percent, progress_seconds, total_seconds, (unsigned int)*bytes_read);
+        }
+        
+        // 如果缓冲区已满，提前退出循环
+        if (*bytes_read >= buffer_size) {
+            ESP_LOGW(TAG_AUDIO, "录音缓冲区已满 (%u 字节)，提前结束录音", (unsigned int)*bytes_read);
+            break;
+        }
     }
     
     // 禁用I2S通道
     i2s_channel_disable(rx_handle);
     
-    // 返回实际读取的字节数
-    *bytes_read = bytes_read_once;
+    // 输出录音完成信息
+    elapsed_time = esp_log_timestamp() - start_time;
+    float recorded_seconds = (float)*bytes_read / bytes_per_second;
     
-    ESP_LOGI(TAG_AUDIO, "录音完成，共录制 %u 字节的数据, 耗时 %u ms", 
-            (unsigned int)bytes_read_once, 
-            (unsigned int)(esp_log_timestamp() - start_time));
+    ESP_LOGI(TAG_AUDIO, "录音完成，共录制 %u 字节 (约 %.2f 秒) 的数据, 耗时 %u 毫秒", 
+            (unsigned int)*bytes_read, recorded_seconds, (unsigned int)elapsed_time);
+    
     return ESP_OK;
 }
 

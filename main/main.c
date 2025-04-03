@@ -184,20 +184,50 @@ static void start_audio_recording(int seconds)
         return;
     }
     
-    // 检查是否有足够的录音缓冲区
+    // 限制录音时间，防止内存不足
+    if (seconds < 1) seconds = 1;
+    if (seconds > 30) seconds = 30; // 最大30秒
+    
+    // 释放以前的录音缓冲区（如果存在）
+    if (s_audio_buffer != NULL) {
+        heap_caps_free(s_audio_buffer);
+        s_audio_buffer = NULL;
+    }
+    
+    // 根据请求的录音时长计算所需的缓冲区大小
+    size_t bytes_per_second = BOARD_AUDIO_SAMPLE_RATE * 2 * BOARD_AUDIO_CHANNELS; // 采样率 * 16位(2字节) * 通道数
+    size_t required_buffer_size = bytes_per_second * seconds;
+    
+    // 至少使用默认的缓冲区大小
+    s_audio_buffer_size = (required_buffer_size > BOARD_AUDIO_BUFFER_SIZE) ? 
+                          required_buffer_size : BOARD_AUDIO_BUFFER_SIZE;
+                          
+    ESP_LOGI(TAG, "为%d秒录音分配缓冲区，大小: %u 字节", seconds, (unsigned int)s_audio_buffer_size);
+    
+    // 优先使用PSRAM分配大缓冲区
+    s_audio_buffer = heap_caps_malloc(s_audio_buffer_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (s_audio_buffer == NULL) {
-        s_audio_buffer = heap_caps_malloc(s_audio_buffer_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        // 尝试使用内部内存
+        ESP_LOGW(TAG, "PSRAM分配失败，尝试使用内部内存");
+        
+        // 对于内部内存，我们缩小缓冲区大小
+        s_audio_buffer_size = bytes_per_second * 2; // 只录制2秒，避免内存不足
+        if (s_audio_buffer_size < 32768) s_audio_buffer_size = 32768; // 至少32KB
+        
+        s_audio_buffer = heap_caps_malloc(s_audio_buffer_size, MALLOC_CAP_8BIT);
+        
         if (s_audio_buffer == NULL) {
-            // 尝试使用内部内存
-            ESP_LOGW(TAG, "PSRAM分配失败，尝试使用内部内存");
-            s_audio_buffer_size = s_audio_buffer_size / 2; // 减小缓冲区大小
-            s_audio_buffer = heap_caps_malloc(s_audio_buffer_size, MALLOC_CAP_8BIT);
-            
-            if (s_audio_buffer == NULL) {
-                ESP_LOGE(TAG, "分配录音缓冲区失败");
-                return;
-            }
+            ESP_LOGE(TAG, "分配录音缓冲区失败，无法录音");
+            return;
         }
+        
+        ESP_LOGW(TAG, "使用内部内存录音，缓冲区大小已减小: %u 字节", (unsigned int)s_audio_buffer_size);
+        // 根据缓冲区大小，重新计算可录制的秒数
+        seconds = s_audio_buffer_size / bytes_per_second;
+        if (seconds < 1) seconds = 1;
+        ESP_LOGI(TAG, "由于内存限制，录音时长调整为: %d 秒", seconds);
+    } else {
+        ESP_LOGI(TAG, "成功在PSRAM中分配 %u 字节的录音缓冲区", (unsigned int)s_audio_buffer_size);
     }
     
     // 初始化录音设备 (如果未初始化)
@@ -205,6 +235,8 @@ static void start_audio_recording(int seconds)
         ret = board_audio_record_init(&s_rx_handle);
         if (ret != ESP_OK) {
             ESP_LOGE(TAG, "初始化录音设备失败: %s", esp_err_to_name(ret));
+            heap_caps_free(s_audio_buffer);
+            s_audio_buffer = NULL;
             return;
         }
     }

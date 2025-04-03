@@ -67,7 +67,7 @@ menu "ESP32-S3 开发板配置"
         
         config AUDIO_BUFFER_SIZE
             int "音频缓冲区大小(字节)"
-            default 32768
+            default 262144
             help
                 设置音频缓冲区大小，单位字节
     endmenu
