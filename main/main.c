@@ -310,7 +310,7 @@ static void websocket_event_handler(void *handler_args, esp_event_base_t base,
             // 连接后发送客户端ID消息
             char connect_msg[128];
             snprintf(connect_msg, sizeof(connect_msg), 
-                    "{\"clientId\":\"%s\",\"status\":\"connected\",\"type\":\"esp32s3\"}", 
+                    "{\"event\":\"device_connected\",\"data\":{\"clientId\":\"%s\",\"type\":\"esp32s3\"}}", 
                     BOARD_WS_DEVICE_CLIENT_ID);
             esp_websocket_client_send_text(s_ws_client, connect_msg, strlen(connect_msg), portMAX_DELAY);
             
@@ -353,47 +353,67 @@ static void websocket_event_handler(void *handler_args, esp_event_base_t base,
         case WEBSOCKET_EVENT_DATA:
             // 处理收到的数据
             if (data->data_len > 0) {
+                ESP_LOGI(TAG, "收到数据: %.*s", data->data_len, (char *)data->data_ptr);
+                
                 // 使用cJSON解析
                 cJSON *root = cJSON_Parse(data->data_ptr);
                 
                 if (root) {
                     // 获取event字段
                     cJSON *event = cJSON_GetObjectItem(root, "event");
+                    // 获取data字段
+                    cJSON *data_obj = cJSON_GetObjectItem(root, "data");
                     
                     if (cJSON_IsString(event) && event->valuestring != NULL) {
                         ESP_LOGI(TAG, "收到事件: %s", event->valuestring);
                         
                         // 处理录音事件
                         if (strcmp(event->valuestring, "start_recording") == 0) {
-                            // 获取录音时长参数
-                            int duration = 5; // 默认5秒
-                            cJSON *duration_obj = cJSON_GetObjectItem(root, "duration");
-                            if (cJSON_IsNumber(duration_obj)) {
-                                duration = duration_obj->valueint;
-                                if (duration < 1) duration = 1;
-                                if (duration > 60) duration = 60; // 限制最大时长
+                            // 默认录音时长为5秒
+                            int duration = 5;
+                            
+                            // 从data字段获取参数
+                            if (data_obj && cJSON_IsObject(data_obj)) {
+                                cJSON *duration_obj = cJSON_GetObjectItem(data_obj, "duration");
+                                if (cJSON_IsNumber(duration_obj)) {
+                                    duration = duration_obj->valueint;
+                                    if (duration < 1) duration = 1;
+                                    if (duration > 60) duration = 60; // 限制最大时长
+                                }
                             }
                             
-                            // 启动录音
+                            ESP_LOGI(TAG, "开始录音，时长: %d秒", duration);
                             start_audio_recording(duration);
+                            
+                            // 发送确认消息
+                            char response[128];
+                            snprintf(response, sizeof(response), 
+                                    "{\"event\":\"recording_started\",\"data\":{\"duration\":%d}}", 
+                                    duration);
+                            esp_websocket_client_send_text(s_ws_client, response, strlen(response), portMAX_DELAY);
                         }
                         // 处理重启事件
                         else if (strcmp(event->valuestring, "restart") == 0) {
                             ESP_LOGW(TAG, "收到重启命令，设备将在3秒后重启");
+                            
                             // 发送确认消息
                             esp_websocket_client_send_text(s_ws_client, 
-                                "{\"event\":\"restart_ack\",\"status\":\"ok\"}", 
+                                "{\"event\":\"restart_ack\",\"data\":{\"status\":\"ok\"}}", 
                                 -1, portMAX_DELAY);
                             vTaskDelay(pdMS_TO_TICKS(3000));
                             esp_restart();
                         }
                         // 处理播放PCM文件事件
                         else if (strcmp(event->valuestring, "play_pcm") == 0) {
-                            // 获取PCM ID
-                            int pcm_id = 1;  // 默认播放1.pcm
-                            cJSON *id_obj = cJSON_GetObjectItem(root, "id");
-                            if (cJSON_IsNumber(id_obj)) {
-                                pcm_id = id_obj->valueint;
+                            // 默认播放1.pcm
+                            int pcm_id = 1;
+                            
+                            // 从data字段获取参数
+                            if (data_obj && cJSON_IsObject(data_obj)) {
+                                cJSON *id_obj = cJSON_GetObjectItem(data_obj, "id");
+                                if (cJSON_IsNumber(id_obj)) {
+                                    pcm_id = id_obj->valueint;
+                                }
                             }
                             
                             ESP_LOGI(TAG, "收到播放PCM命令，ID: %d", pcm_id);
@@ -404,11 +424,13 @@ static void websocket_event_handler(void *handler_args, esp_event_base_t base,
                             // 发送播放结果
                             char response[128];
                             snprintf(response, sizeof(response), 
-                                    "{\"event\":\"play_pcm_result\",\"id\":%d,\"status\":\"%s\"}", 
+                                    "{\"event\":\"play_pcm_result\",\"data\":{\"id\":%d,\"status\":\"%s\"}}", 
                                     pcm_id, (ret == ESP_OK) ? "ok" : "fail");
                             esp_websocket_client_send_text(s_ws_client, response, strlen(response), portMAX_DELAY);
                         }
                         // 处理其他事件...
+                    } else {
+                        ESP_LOGW(TAG, "收到的JSON数据中没有有效的event字段");
                     }
                     
                     cJSON_Delete(root);
