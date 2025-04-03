@@ -25,6 +25,36 @@
    服务端传输数据固定格式：
    {"event":"eventname","data":{}}
 
+目前事件有
+
+服务端重启设备 （正式功能）
+{
+  "clientId": "esp32s3_board_01",
+  "param": {
+  },
+  "eventName": "restart"
+}
+
+
+播放不同的pcm 4个（测试功能）
+{
+  "clientId": "esp32s3_board_01",
+  "param": {
+    "id": 4
+  },
+  "eventName": "play_pcm"
+}
+
+
+录音5秒后播放 （测试功能）
+{
+  "clientId": "esp32s3_board_01",
+  "param": {
+    "duration": 5
+  },
+  "eventName": "start_recording"
+}
+
 
 4. **语音播报测试**     （优先级3）
    - 完善语音播报功能测试 （更多的提示音） 
