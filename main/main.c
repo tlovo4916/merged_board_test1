@@ -50,6 +50,17 @@ typedef enum {
 
 static system_state_t s_system_state = SYSTEM_STATE_INIT;
 
+// 添加到文件顶部的变量声明部分
+static bool first_connection = true;
+
+// 添加重置连接标志的定时器回调函数
+static void reset_connection_timer_cb(TimerHandle_t timer)
+{
+    // 重置first_connection标志，这样下次连接时会再次播放提示音
+    first_connection = true;
+    ESP_LOGI(TAG, "长时间断开连接，重置首次连接标志");
+}
+
 // 函数声明
 static void play_recorded_audio(size_t bytes_recorded);
 static void play_default_audio(void);
@@ -284,8 +295,14 @@ static void websocket_event_handler(void *handler_args, esp_event_base_t base,
         case WEBSOCKET_EVENT_CONNECTED:
             ESP_LOGI(TAG, "WebSocket 已连接");
             
-            // 播放连接成功提示音
-            play_pcm_by_id(4); 
+            // 使用全局变量跟踪是否是首次连接
+            if (first_connection) {
+                // 播放连接成功提示音
+                play_pcm_by_id(4);
+                first_connection = false;
+            } else {
+                ESP_LOGI(TAG, "WebSocket 重新连接成功，跳过提示音播放");
+            }
 
             // 设置WebSocket连接事件位
             xEventGroupSetBits(board_event_group, WEBSOCKET_CONNECTED_BIT);
@@ -303,6 +320,27 @@ static void websocket_event_handler(void *handler_args, esp_event_base_t base,
             
         case WEBSOCKET_EVENT_DISCONNECTED:
             ESP_LOGI(TAG, "WebSocket 已断开连接");
+            
+            // 创建一个定时器，如果断开超过一定时间（例如30秒），则重置首次连接标志
+            static TimerHandle_t reset_timer = NULL;
+            if (reset_timer == NULL) {
+                reset_timer = xTimerCreate(
+                    "reset_connection",
+                    pdMS_TO_TICKS(30000), // 30秒
+                    pdFALSE,              // 不自动重载
+                    NULL,
+                    reset_connection_timer_cb
+                );
+            }
+            
+            // 启动或重新启动定时器
+            if (reset_timer != NULL) {
+                if (xTimerIsTimerActive(reset_timer)) {
+                    xTimerReset(reset_timer, 0);
+                } else {
+                    xTimerStart(reset_timer, 0);
+                }
+            }
             
             // 清除WebSocket连接事件位
             xEventGroupClearBits(board_event_group, WEBSOCKET_CONNECTED_BIT);
