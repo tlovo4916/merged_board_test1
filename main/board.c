@@ -1590,9 +1590,33 @@ esp_err_t board_websocket_init(esp_websocket_client_handle_t *client_handle_out,
         return ESP_ERR_NO_MEM;
     }
     
+    // 修改WebSocket URL，确保包含客户端ID
+    char *full_url = NULL;
+    // 检查URL是否以"/"结尾
+    if (url[strlen(url) - 1] == '/') {
+        // URL已经以"/"结尾，直接添加客户端ID
+        full_url = malloc(strlen(url) + strlen(BOARD_WS_DEVICE_CLIENT_ID) + 1);
+        if (full_url == NULL) {
+            ESP_LOGE(TAG, "内存分配失败");
+            free(url);
+            return ESP_ERR_NO_MEM;
+        }
+        sprintf(full_url, "%s%s", url, BOARD_WS_DEVICE_CLIENT_ID);
+    } else {
+        // URL不以"/"结尾，添加"/"和客户端ID
+        full_url = malloc(strlen(url) + strlen(BOARD_WS_DEVICE_CLIENT_ID) + 2);
+        if (full_url == NULL) {
+            ESP_LOGE(TAG, "内存分配失败");
+            free(url);
+            return ESP_ERR_NO_MEM;
+        }
+        sprintf(full_url, "%s/%s", url, BOARD_WS_DEVICE_CLIENT_ID);
+    }
+    free(url);
+    
     // 配置WebSocket客户端
     esp_websocket_client_config_t ws_config = {
-        .uri = url,
+        .uri = full_url,
         .disable_auto_reconnect = false,
         .reconnect_timeout_ms = BOARD_WS_RECONNECT_INTERVAL_MS,
         .network_timeout_ms = BOARD_WS_NETWORK_TIMEOUT_MS,
@@ -1604,15 +1628,15 @@ esp_err_t board_websocket_init(esp_websocket_client_handle_t *client_handle_out,
     *client_handle_out = esp_websocket_client_init(&ws_config);
     if (*client_handle_out == NULL) {
         ESP_LOGE(TAG, "初始化WebSocket客户端失败");
-        free(url);
+        free(full_url);
         return ESP_FAIL;
     }
     
     // 注册事件处理函数
     esp_websocket_register_events(*client_handle_out, WEBSOCKET_EVENT_ANY, event_handler, handler_args);
     
-    ESP_LOGI(TAG, "WebSocket客户端初始化成功，服务器URL: %s", url);
-    free(url);
+    ESP_LOGI(TAG, "WebSocket客户端初始化成功，服务器URL: %s", full_url);
+    free(full_url);
     
     return ESP_OK;
 }
