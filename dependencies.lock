@@ -1,0 +1,54 @@
+dependencies:
+  espressif/es7210:
+    component_hash: 761ac59d31d8babb01f6338045cc877f2a75027bae9823a4e4d0b6e5b6f63faf
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=4.4,<6.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.0.1~1
+  espressif/es8311:
+    component_hash: 46b3117250344bb03f143d5e2becf81cfb111679fbd7b95cefc2d302d36cc393
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=4.4,<6.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.0.0~1
+  espressif/esp_websocket_client:
+    component_hash: f77326f0e1c38da4e9c97e17c5d649b0dd13027f2645e720e48db269638fd622
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.4.0
+  espressif/jsmn:
+    component_hash: d80350c41bbaa827c98a25b6072df00884e72f54885996fab4a4f0aebce6b6c3
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=4.3'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.1.0
+  idf:
+    source:
+      type: idf
+    version: 5.3.2
+direct_dependencies:
+- espressif/es7210
+- espressif/es8311
+- espressif/esp_websocket_client
+- espressif/jsmn
+- idf
+manifest_hash: 2393d46b2797f0166fc1a7367e80080c2f5fed4d6968b0fc0e28901eaa31c5fc
+target: esp32s3
+version: 2.0.0

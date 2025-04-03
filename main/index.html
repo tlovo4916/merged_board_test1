@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>ESP32-S3 WiFi配置</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+            padding: 20px;
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #0066cc;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+        .device-info {
+            background-color: #f0f7ff;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"],
+        input[type="password"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            -webkit-appearance: none; /* 防止iOS设备上的样式问题 */
+        }
+        button {
+            background-color: #0066cc;
+            color: white;
+            border: none;
+            padding: 12px;
+            width: 100%;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            -webkit-appearance: none; /* 防止iOS设备上的样式问题 */
+        }
+        button:hover {
+            background-color: #0052a3;
+        }
+        button:disabled {
+            background-color: #99bbdd;
+            cursor: not-allowed;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .success {
+            background-color: #e6f7e6;
+            color: #2e7d32;
+            border: 1px solid #a5d6a7;
+        }
+        .error {
+            background-color: #ffebee;
+            color: #c62828;
+            border: 1px solid #ef9a9a;
+        }
+        .warning {
+            background-color: #fff3e0;
+            color: #e65100;
+            border: 1px solid #ffcc80;
+        }
+        .connecting {
+            background-color: #e3f2fd;
+            color: #0277bd;
+            border: 1px solid #90caf9;
+        }
+        .hidden {
+            display: none;
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #0066cc;
+            animation: spin 1s linear infinite;
+            margin: 10px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .logo {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+        .connection-steps {
+            margin-top: 10px;
+            text-align: left;
+            font-size: 14px;
+        }
+        .connection-steps li {
+            margin-bottom: 5px;
+            list-style-position: inside;
+        }
+        .connection-steps .active {
+            font-weight: bold;
+            color: #0066cc;
+        }
+        .connection-steps .completed {
+            color: #2e7d32;
+            text-decoration: line-through;
+        }
+        .countdown {
+            font-weight: bold;
+            font-size: 18px;
+            margin-top: 10px;
+        }
+        .back-btn {
+            margin-top: 15px;
+            background-color: #f5f5f5;
+            color: #333;
+            border: 1px solid #ddd;
+        }
+        .back-btn:hover {
+            background-color: #e0e0e0;
+        }
+        .browser-tip {
+            margin-bottom: 15px;
+            padding: 8px;
+            background-color: #fff3e0;
+            border-radius: 5px;
+            font-size: 14px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ESP32-S3 设备配网</h1>
+        
+        <div class="device-info">
+            <div class="info-row">
+                <span>设备型号:</span>
+                <span>ESP32-S3 开发板</span>
+            </div>
+            <div class="info-row">
+                <span>MAC地址:</span>
+                <span id="mac-address">加载中...</span>
+            </div>
+        </div>
+        
+        <div id="xiaomi-tip" class="browser-tip hidden">
+            <p>检测到小米手机，请注意：如果配网后无反应，请点击右上角菜单，选择「在浏览器中打开」</p>
+        </div>
+        
+        <form id="wifi-form">
+            <div class="form-group">
+                <label for="ssid">WiFi名称 (SSID):</label>
+                <input type="text" id="ssid" name="ssid" required autocomplete="off" autocorrect="off" autocapitalize="none">
+            </div>
+            
+            <div class="form-group">
+                <label for="password">WiFi密码:</label>
+                <input type="password" id="password" name="password" autocomplete="off" autocorrect="off" autocapitalize="none">
+                <small>* 如果是开放网络可不填</small>
+            </div>
+            
+            <button type="submit" id="submit-btn">连接</button>
+        </form>
+        
+        <div id="status-connecting" class="status connecting hidden">
+            <div class="spinner"></div>
+            <p><strong>正在尝试连接WiFi...</strong></p>
+            <ul class="connection-steps">
+                <li class="active" id="step-1">验证WiFi信息</li>
+                <li id="step-2">尝试连接到WiFi网络</li>
+                <li id="step-3">获取网络IP地址</li>
+                <li id="step-4">保存配置并准备重启</li>
+            </ul>
+            <p class="warning" style="margin-top: 10px;">请不要关闭此页面，连接可能需要15-30秒</p>
+        </div>
+        
+        <div id="status-success" class="status success hidden">
+            <p><strong>WiFi配置成功！</strong></p>
+            <p>WiFi配置已保存，设备将在几秒后重启并连接到您的网络。</p>
+            <div class="countdown">
+                倒计时: <span id="countdown-timer">3</span> 秒后重启
+            </div>
+        </div>
+        
+        <div id="status-error" class="status error hidden">
+            <p><strong>连接失败</strong></p>
+            <p id="error-message"></p>
+            <button class="back-btn" id="back-btn">返回重试</button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 检测是否为小米手机
+            const userAgent = navigator.userAgent.toLowerCase();
+            if (userAgent.indexOf('miui') > -1 || userAgent.indexOf('xiaomi') > -1 || userAgent.indexOf('mi ') > -1) {
+                document.getElementById('xiaomi-tip').classList.remove('hidden');
+                console.log('检测到小米手机');
+            }
+            
+            // 立即获取设备信息，不要等待其他资源加载
+            fetchDeviceInfo();
+            
+            // 表单提交处理
+            document.getElementById('wifi-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const ssid = document.getElementById('ssid').value.trim();
+                const password = document.getElementById('password').value;
+                
+                if (!ssid) {
+                    showError('WiFi名称不能为空');
+                    return;
+                }
+                
+                // 禁用表单，防止重复提交
+                document.getElementById('submit-btn').disabled = true;
+                
+                // 显示连接状态
+                hideAllStatus();
+                document.getElementById('status-connecting').classList.remove('hidden');
+                
+                // 设置连接步骤
+                document.getElementById('step-1').classList.add('active');
+                
+                // 发送WiFi配置请求
+                const formData = `ssid=${encodeURIComponent(ssid)}&password=${encodeURIComponent(password)}`;
+                console.log('发送WiFi配置请求，数据长度: ' + formData.length);
+                
+                // 使用fetch API发送请求
+                fetch('/api/set-wifi', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: formData,
+                    // 设置更长的超时时间
+                    signal: AbortSignal.timeout(30000)
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('网络请求失败: ' + response.status);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('收到响应:', data);
+                    
+                    // 更新连接步骤
+                    document.getElementById('step-1').classList.remove('active');
+                    document.getElementById('step-1').classList.add('completed');
+                    document.getElementById('step-2').classList.add('completed');
+                    document.getElementById('step-3').classList.add('completed');
+                    document.getElementById('step-4').classList.add('active');
+                    
+                    if (data.status === "ok") {
+                        // 成功连接
+                        setTimeout(function() {
+                            hideAllStatus();
+                            document.getElementById('status-success').classList.remove('hidden');
+                            
+                            // 倒计时3秒后模拟设备重启
+                            let countdown = 3;
+                            document.getElementById('countdown-timer').textContent = countdown;
+                            
+                            const timer = setInterval(function() {
+                                countdown--;
+                                document.getElementById('countdown-timer').textContent = countdown;
+                                
+                                if (countdown <= 0) {
+                                    clearInterval(timer);
+                                }
+                            }, 1000);
+                        }, 500);
+                    } else {
+                        // 连接失败
+                        showError(data.message || '未知错误');
+                    }
+                })
+                .catch(error => {
+                    console.error('配置请求错误:', error);
+                    // 判断错误类型
+                    if (error instanceof TypeError && (error.message.includes('Failed to fetch') || error.message.includes('NetworkError'))) {
+                        // 网络错误，很可能是因为设备切换网络导致连接中断，这是预期行为
+                        // 显示一个更友好的提示，而不是直接报错
+                        showInfo("WiFi配置已发送，设备正在尝试连接到您的网络并重启。请稍后手动检查设备状态或连接到您的家庭WiFi网络。", 30000); // 显示30秒
+                    } else if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+                        // 请求超时
+                        showError('请求超时，无法确认连接状态，请返回重试');
+                    } else {
+                        // 其他类型的错误
+                        showError('配置请求失败: ' + error.message);
+                    }
+                });
+            });
+            
+            // 返回按钮处理
+            document.getElementById('back-btn').addEventListener('click', function() {
+                hideAllStatus();
+                document.getElementById('wifi-form').classList.remove('hidden');
+                document.getElementById('submit-btn').disabled = false;
+            });
+            
+            // 获取设备信息
+            function fetchDeviceInfo() {
+                fetch('/api/device-info')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('网络请求失败');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.status === "ok" && data.mac) {
+                        document.getElementById('mac-address').textContent = data.mac;
+                    } else {
+                        document.getElementById('mac-address').textContent = '无法获取';
+                    }
+                })
+                .catch(error => {
+                    console.error('获取设备信息失败:', error);
+                    document.getElementById('mac-address').textContent = '无法获取';
+                });
+            }
+            
+            // 隐藏所有状态区域
+            function hideAllStatus() {
+                document.getElementById('status-connecting').classList.add('hidden');
+                document.getElementById('status-success').classList.add('hidden');
+                document.getElementById('status-error').classList.add('hidden');
+            }
+            
+            // 显示错误信息
+            function showError(message) {
+                hideAllStatus();
+                document.getElementById('error-message').textContent = message;
+                document.getElementById('status-error').classList.remove('hidden');
+                document.getElementById('submit-btn').disabled = false;
+            }
+
+            // 显示提示信息
+            function showInfo(message, duration = 5000) {
+                hideAllStatus();
+                const infoDiv = document.createElement('div');
+                infoDiv.className = 'status warning'; // 使用 warning 样式
+                infoDiv.innerHTML = `<p>${message}</p>`;
+                
+                const container = document.querySelector('.container');
+                container.appendChild(infoDiv);
+
+                // 自动隐藏提示信息
+                setTimeout(() => {
+                    infoDiv.remove();
+                    // 可以选择显示返回按钮或重新启用表单
+                    document.getElementById('submit-btn').disabled = false;
+                }, duration);
+            }
+        });
+    </script>
+</body>
+</html> 

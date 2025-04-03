@@ -1,0 +1,83 @@
+menu "ESP32-S3 开发板配置"
+
+    menu "WiFi 配置"
+        config WIFI_SSID
+            string "WiFi SSID"
+            default "your_wifi_ssid"
+            help
+                设置要连接的WiFi网络名称
+        
+        config WIFI_PASSWORD
+            string "WiFi 密码"
+            default "your_wifi_password"
+            help
+                设置WiFi网络密码
+        
+        config WIFI_CONNECT_TIMEOUT_MS
+            int "WiFi连接超时时间(毫秒)"
+            default 20000
+            help
+                设置WiFi连接超时时间，单位毫秒
+        
+        config WIFI_RECONNECT_INTERVAL_MS
+            int "WiFi重连间隔(毫秒)"
+            default 5000
+            help
+                设置WiFi断开后重连的间隔时间，单位毫秒
+    endmenu
+
+    menu "WebSocket 配置"
+        config WS_SERVER_URL
+            string "WebSocket服务器URL"
+            default "ws://192.168.0.23:8086/robws"
+            help
+                设置WebSocket服务器地址，格式为ws://host:port/path
+        
+        config WS_DEVICE_CLIENT_ID
+            string "WebSocket设备客户端ID"
+            default "esp32s3_board_01"
+            help
+                设置设备的WebSocket客户端ID
+        
+        config WS_RECONNECT_INTERVAL_MS
+            int "WebSocket重连间隔(毫秒)"
+            default 5000
+            help
+                设置WebSocket断开后重连的间隔时间，单位毫秒
+    endmenu
+
+    menu "音频配置"
+        config AUDIO_SAMPLE_RATE
+            int "音频采样率(Hz)"
+            default 48000
+            help
+                设置音频采样率，单位Hz
+        
+        config AUDIO_BIT_WIDTH
+            int "音频位宽"
+            default 16
+            help
+                设置音频位宽，通常为16或24
+        
+        config AUDIO_CHANNELS
+            int "音频通道数"
+            default 1
+            help
+                设置音频通道数，1为单声道，2为立体声
+        
+        config AUDIO_BUFFER_SIZE
+            int "音频缓冲区大小(字节)"
+            default 32768
+            help
+                设置音频缓冲区大小，单位字节
+    endmenu
+
+    menu "系统配置"
+        config FACTORY_RESET_LONG_PRESS_TIME_MS
+            int "恢复出厂设置长按时间(毫秒)"
+            default 5000
+            help
+                设置触发恢复出厂设置的按键长按时间，单位毫秒
+    endmenu
+
+endmenu 

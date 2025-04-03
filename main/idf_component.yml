@@ -1,0 +1,14 @@
+## IDF Component Manager Manifest File
+dependencies:
+  ## 所需的 IDF 版本
+  idf: ">=5.0.0"
+  
+  ## 音频相关组件
+  espressif/es8311: "^1.0.0"
+  espressif/es7210: "^1.0.0"
+  
+  ## WebSocket 组件
+  espressif/esp_websocket_client: "^1.4.0"
+  
+  ## JSON 解析相关
+  espressif/jsmn: "^1.1.0" 

@@ -1,0 +1,6 @@
+## IDF Component Manager Manifest File
+dependencies:
+  idf: ^5.0
+  espressif/es8311: ^1.0.0
+  espressif/es7210: "^1.0.0"
+  
