@@ -107,3 +107,6 @@ idf.py -p [PORT] flash monitor
 ## 许可证
 
 [添加许可证信息]
+
+服务端传输数据固定格式：
+   {"event":"eventname","data":{}}
